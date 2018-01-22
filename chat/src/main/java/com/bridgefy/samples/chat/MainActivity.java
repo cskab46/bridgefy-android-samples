@@ -65,11 +65,11 @@ public class MainActivity extends AppCompatActivity {
 
 
 
-        if (isThingsDevice(this)) {
-            //enabling bluetooth automatically
-            BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-            bluetoothAdapter.enable();
-        }
+//        if (isThingsDevice(this)) {
+//            //enabling bluetooth automatically
+//            BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+//            bluetoothAdapter.enable();
+//        }
 
         Bridgefy.initialize(getApplicationContext(), new RegistrationListener() {
             @Override
@@ -125,10 +125,10 @@ public class MainActivity extends AppCompatActivity {
         Bridgefy.start(messageListener, stateListener);
     }
 
-    public boolean isThingsDevice(Context context) {
-        final PackageManager pm = context.getPackageManager();
-        return pm.hasSystemFeature("android.hardware.type.embedded");
-    }
+//    public boolean isThingsDevice(Context context) {
+//        final PackageManager pm = context.getPackageManager();
+//        return pm.hasSystemFeature("android.hardware.type.embedded");
+//    }
 
     private MessageListener messageListener = new MessageListener() {
         @Override
@@ -149,16 +149,16 @@ public class MainActivity extends AppCompatActivity {
                                 .putExtra(INTENT_EXTRA_MSG, incomingMessage));
             }
 
-            if (isThingsDevice(MainActivity.this)) {
-                //if it's an Android Things device, reply automatically
-                HashMap<String, Object> content = new HashMap<>();
-                content.put("text", "Beep boop. I'm a bot.");
-
-                Message.Builder builder=new Message.Builder();
-                builder.setContent(content).setReceiverId(message.getSenderId());
-                Bridgefy.sendMessage(builder.build());
-
-            }
+//            if (isThingsDevice(MainActivity.this)) {
+//                //if it's an Android Things device, reply automatically
+//                HashMap<String, Object> content = new HashMap<>();
+//                content.put("text", "Beep boop. I'm a bot.");
+//
+//                Message.Builder builder=new Message.Builder();
+//                builder.setContent(content).setReceiverId(message.getSenderId());
+//                Bridgefy.sendMessage(builder.build());
+//
+//            }
         }
 
         @Override
