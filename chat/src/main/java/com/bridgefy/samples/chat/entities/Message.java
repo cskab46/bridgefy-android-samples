@@ -14,11 +14,15 @@ public class Message {
     private int    direction;
     private String deviceName;
     private String text;
+    private String timeStr;
 
     public Message(String text) {
         this.text = text;
     }
 
+    public String getTimeStr() { return timeStr;}
+
+    public void setTimeStr(String timeStr) { this.timeStr = timeStr;}
 
     public int getDirection() {
         return direction;

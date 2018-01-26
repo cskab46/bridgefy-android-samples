@@ -44,6 +44,7 @@ public class MainActivity extends AppCompatActivity {
     static final String INTENT_EXTRA_UUID = "peerUuid";
     static final String INTENT_EXTRA_TYPE = "deviceType";
     static final String INTENT_EXTRA_MSG  = "message";
+    static final String INTENT_EXTRA_MSGSENDTS = "sendtimestamp";
     static final String BROADCAST_CHAT    = "Broadcast";
 
     PeersRecyclerViewAdapter peersAdapter =
@@ -140,7 +141,7 @@ public class MainActivity extends AppCompatActivity {
                 peer.setNearby(true);
                 peer.setDeviceType(extractType(message));
                 peersAdapter.addPeer(peer);
-
+                Toast.makeText(getApplicationContext(), "device " + message.getContent().get("device_name") +" connected!", Toast.LENGTH_LONG).show();
             // any other direct message should be treated as such
             } else {
                 String incomingMessage = (String) message.getContent().get("text");
@@ -166,13 +167,16 @@ public class MainActivity extends AppCompatActivity {
             // we should not expect to have connected previously to the device that originated
             // the incoming broadcast message, so device information is included in this packet
             String incomingMsg = (String) message.getContent().get("text");
+//            String incomingMsg = (String) message.getData().toString();
             String deviceName  = (String) message.getContent().get("device_name");
-            Peer.DeviceType deviceType = extractType(message);
-
+//            Peer.DeviceType deviceType = extractType(message);
+            Peer.DeviceType deviceType = Peer.DeviceType.ANDROID;
+            Long sendTimestamp = message.getDateSent();
             LocalBroadcastManager.getInstance(getBaseContext()).sendBroadcast(
                     new Intent(BROADCAST_CHAT)
                             .putExtra(INTENT_EXTRA_NAME, deviceName)
                             .putExtra(INTENT_EXTRA_TYPE, deviceType)
+                            .putExtra(INTENT_EXTRA_MSGSENDTS, sendTimestamp)
                             .putExtra(INTENT_EXTRA_MSG,  incomingMsg));
         }
     };
@@ -201,6 +205,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onDeviceLost(Device peer) {
             Log.w(TAG, "onDeviceLost: " + peer.getUserId());
+            Toast.makeText(getApplicationContext(), "device " + peer.getDeviceName() +" lost!", Toast.LENGTH_LONG).show();
             peersAdapter.removePeer(peer);
         }
 
