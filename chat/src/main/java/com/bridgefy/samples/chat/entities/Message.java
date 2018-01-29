@@ -11,10 +11,32 @@ public class Message {
     public final static int INCOMING_MESSAGE = 0;
     public final static int OUTGOING_MESSAGE = 1;
 
+    public final static int TYPE_MESSAGE = 0;
+    public final static int TYPE_FILE = 1;
+
     private int    direction;
     private String deviceName;
     private String text;
     private String timeStr;
+    private String fileName;
+
+    public String getFileName() {
+        return fileName;
+    }
+
+    public void setFileName(String fileName) {
+        this.fileName = fileName;
+    }
+
+    public int getFileDataLen() {
+        return fileDataLen;
+    }
+
+    public void setFileDataLen(int fileDataLen) {
+        this.fileDataLen = fileDataLen;
+    }
+
+    private int fileDataLen;
 
     public Message(String text) {
         this.text = text;

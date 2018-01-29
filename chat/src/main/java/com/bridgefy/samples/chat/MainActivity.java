@@ -43,6 +43,9 @@ public class MainActivity extends AppCompatActivity {
     static final String INTENT_EXTRA_NAME = "peerName";
     static final String INTENT_EXTRA_UUID = "peerUuid";
     static final String INTENT_EXTRA_TYPE = "deviceType";
+    static final String INTENT_EXTRA_MSGTYPE = "messageType";
+    static final String INTENT_EXTRA_FILENAME = "fileName";
+    static final String INTENT_EXTRA_FILEDATA = "fileData";
     static final String INTENT_EXTRA_MSG  = "message";
     static final String INTENT_EXTRA_MSGSENDTS = "sendtimestamp";
     static final String BROADCAST_CHAT    = "Broadcast";
@@ -76,6 +79,8 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onRegistrationSuccessful(BridgefyClient bridgefyClient) {
                 // Start Bridgefy
+                Toast.makeText(getBaseContext(), "registration successful!",
+                        Toast.LENGTH_LONG).show();
                 startBridgefy();
             }
 
@@ -170,6 +175,14 @@ public class MainActivity extends AppCompatActivity {
 //            String incomingMsg = (String) message.getData().toString();
             String deviceName  = (String) message.getContent().get("device_name");
 //            Peer.DeviceType deviceType = extractType(message);
+            int msgType = (int) message.getContent().get("msg_type");
+            byte[] fileData = null;
+            String fileName = null;
+            if (msgType == com.bridgefy.samples.chat.entities.Message.TYPE_FILE) {
+                fileData = message.getData();
+                fileName = (String) message.getContent().get("file");
+            }
+
             Peer.DeviceType deviceType = Peer.DeviceType.ANDROID;
             Long sendTimestamp = message.getDateSent();
             LocalBroadcastManager.getInstance(getBaseContext()).sendBroadcast(
@@ -177,7 +190,10 @@ public class MainActivity extends AppCompatActivity {
                             .putExtra(INTENT_EXTRA_NAME, deviceName)
                             .putExtra(INTENT_EXTRA_TYPE, deviceType)
                             .putExtra(INTENT_EXTRA_MSGSENDTS, sendTimestamp)
-                            .putExtra(INTENT_EXTRA_MSG,  incomingMsg));
+                            .putExtra(INTENT_EXTRA_MSGTYPE, msgType)
+                            .putExtra(INTENT_EXTRA_FILENAME, fileName)
+                            .putExtra(INTENT_EXTRA_FILEDATA, fileData)
+                            .putExtra(INTENT_EXTRA_MSG, incomingMsg));
         }
     };
 

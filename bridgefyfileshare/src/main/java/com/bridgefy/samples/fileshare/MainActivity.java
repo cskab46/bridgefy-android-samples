@@ -62,10 +62,6 @@ public class MainActivity extends AppCompatActivity {
         RecyclerView recyclerView = findViewById(R.id.peer_list);
         recyclerView.setAdapter(peersAdapter);
 
-
-
-
-
         Bridgefy.initialize(getApplicationContext(), new RegistrationListener() {
             @Override
             public void onRegistrationSuccessful(BridgefyClient bridgefyClient) {
