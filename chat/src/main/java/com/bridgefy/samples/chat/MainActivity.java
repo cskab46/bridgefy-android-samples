@@ -8,6 +8,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.AppCompatActivity;
@@ -32,9 +33,14 @@ import com.bridgefy.sdk.client.RegistrationListener;
 import com.bridgefy.sdk.client.Session;
 import com.bridgefy.sdk.client.StateListener;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.UUID;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -43,11 +49,10 @@ public class MainActivity extends AppCompatActivity {
     static final String INTENT_EXTRA_NAME = "peerName";
     static final String INTENT_EXTRA_UUID = "peerUuid";
     static final String INTENT_EXTRA_TYPE = "deviceType";
-    static final String INTENT_EXTRA_MSGTYPE = "messageType";
-    static final String INTENT_EXTRA_FILENAME = "fileName";
-    static final String INTENT_EXTRA_FILEDATA = "fileData";
     static final String INTENT_EXTRA_MSG  = "message";
+    static final String INTENT_EXTRA_MSGTYPE = "messageType";
     static final String INTENT_EXTRA_MSGSENDTS = "sendtimestamp";
+    static final String INTENT_EXTRA_DATALEN = "DataLen";
     static final String BROADCAST_CHAT    = "Broadcast";
 
     PeersRecyclerViewAdapter peersAdapter =
@@ -140,6 +145,13 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onMessageReceived(Message message) {
             // direct messages carrying a Device name represent device handshakes
+            int msgType = -1;
+            msgType = extractBridgefyMsgType(message);
+            if (msgType == -1) {
+                Log.w(TAG, "onMessageReceived: msgtype: " + msgType);
+                return;
+            }
+
             if (message.getContent().get("device_name") != null) {
                 Peer peer = new Peer(message.getSenderId(),
                         (String) message.getContent().get("device_name"));
@@ -152,9 +164,9 @@ public class MainActivity extends AppCompatActivity {
                 String incomingMessage = (String) message.getContent().get("text");
                 LocalBroadcastManager.getInstance(getBaseContext()).sendBroadcast(
                         new Intent(message.getSenderId())
-                                .putExtra(INTENT_EXTRA_MSG, incomingMessage));
+                                .putExtra(INTENT_EXTRA_MSG, incomingMessage)
+                                .putExtra(INTENT_EXTRA_MSGTYPE, msgType));
             }
-
 //            if (isThingsDevice(MainActivity.this)) {
 //                //if it's an Android Things device, reply automatically
 //                HashMap<String, Object> content = new HashMap<>();
@@ -168,34 +180,105 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @Override
+        public void onMessageSent(Message message) {
+            super.onMessageSent(message);
+            Log.i(TAG, "message sent ! time used: " + (System.currentTimeMillis() - message.getDateSent()));
+        }
+
+        @Override
+        public void onMessageDataProgress(UUID message, long progress, long fullSize) {
+            super.onMessageDataProgress(message, progress, fullSize);
+        }
+
+        @Override
         public void onBroadcastMessageReceived(Message message) {
             // we should not expect to have connected previously to the device that originated
             // the incoming broadcast message, so device information is included in this packet
-            String incomingMsg = (String) message.getContent().get("text");
-//            String incomingMsg = (String) message.getData().toString();
-            String deviceName  = (String) message.getContent().get("device_name");
-//            Peer.DeviceType deviceType = extractType(message);
-            int msgType = (int) message.getContent().get("msg_type");
-            byte[] fileData = null;
+            String deviceName  = null;
+            String incomingMsg = null;
+            int msgType = -1;
+            byte[] data = null;
             String fileName = null;
-            if (msgType == com.bridgefy.samples.chat.entities.Message.TYPE_FILE) {
-                fileData = message.getData();
-                fileName = (String) message.getContent().get("file");
-            }
+            int dataLen = -1;
 
             Peer.DeviceType deviceType = Peer.DeviceType.ANDROID;
             Long sendTimestamp = message.getDateSent();
-            LocalBroadcastManager.getInstance(getBaseContext()).sendBroadcast(
-                    new Intent(BROADCAST_CHAT)
-                            .putExtra(INTENT_EXTRA_NAME, deviceName)
-                            .putExtra(INTENT_EXTRA_TYPE, deviceType)
-                            .putExtra(INTENT_EXTRA_MSGSENDTS, sendTimestamp)
-                            .putExtra(INTENT_EXTRA_MSGTYPE, msgType)
-                            .putExtra(INTENT_EXTRA_FILENAME, fileName)
-                            .putExtra(INTENT_EXTRA_FILEDATA, fileData)
-                            .putExtra(INTENT_EXTRA_MSG, incomingMsg));
+            Intent intent = new Intent(BROADCAST_CHAT);
+
+            deviceName = (String) message.getContent().get("device_name");
+            msgType = extractBridgefyMsgType(message);;
+            if (deviceName == null || msgType == -1) {
+                Log.w(TAG, "onBroadcastMessageReceived: msgtype: " + msgType
+                        + "deviceName: " + (deviceName.isEmpty() ? "NULL" : deviceName));
+                return;
+            }
+            if (msgType == com.bridgefy.samples.chat.entities.Message.TYPE_FILE) {
+                data = (byte[]) message.getContent().get("Data");
+                fileName = (String) message.getContent().get("text");
+                if (data == null || fileName == null) {
+                    Log.w(TAG, "onBroadcastMessageReceived: "
+                            + "fileName: " + (fileName.isEmpty() ? "NULL" : fileName)
+                            + "fileData: " + (data == null ? "NULL" : data.length));
+                    return;
+                }
+
+                //save file to local filesystem
+                File file = new File(Environment.getExternalStorageDirectory()
+                        .getAbsolutePath() + File.separator + fileName);
+                FileOutputStream fos = null;
+                try {
+                    fos = new FileOutputStream(file);
+                    fos.write(data);
+                    fos.close();
+                    dataLen = data.length;
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    if (fos != null) {
+                        try {
+                            fos.close();
+                        } catch (IOException e1) {
+                            e1.printStackTrace();
+                        }
+                    }
+                    Log.w(TAG, "onBroadcastMessageReceived: save file error!");
+                    return;
+                }
+
+                intent.putExtra(INTENT_EXTRA_MSG, fileName)
+                        .putExtra(INTENT_EXTRA_DATALEN, dataLen);
+            } else if (msgType == com.bridgefy.samples.chat.entities.Message.TYPE_MESSAGE){
+                incomingMsg = (String) message.getContent().get("text");
+                intent.putExtra(INTENT_EXTRA_MSG, incomingMsg);
+            } else if (msgType == com.bridgefy.samples.chat.entities.Message.TYPE_DATA) {
+                incomingMsg = (String) message.getContent().get("text");
+                data = (byte[]) message.getContent().get("Data");
+                dataLen = data.length;
+                intent.putExtra(INTENT_EXTRA_MSG, incomingMsg)
+                        .putExtra(INTENT_EXTRA_DATALEN, dataLen);
+            } else {
+                Log.d(TAG, "onBroadcastMessageReceived: msgtype " + msgType);
+                return;
+            }
+
+            intent.putExtra(INTENT_EXTRA_NAME, deviceName)
+                    .putExtra(INTENT_EXTRA_TYPE, deviceType)
+                    .putExtra(INTENT_EXTRA_MSGSENDTS, sendTimestamp)
+                    .putExtra(INTENT_EXTRA_MSGTYPE, msgType);
+
+            LocalBroadcastManager.getInstance(getBaseContext()).sendBroadcast(intent);
         }
     };
+
+    private int extractBridgefyMsgType(Message message) {
+        int eventOrdinal;
+        Object eventObj = message.getContent().get("msg_type");
+        if (eventObj instanceof Double) {
+            eventOrdinal = ((Double) eventObj).intValue();
+        } else {
+            eventOrdinal = (Integer) eventObj;
+        }
+        return eventOrdinal;
+    }
 
     private Peer.DeviceType extractType(Message message) {
         int eventOrdinal;
@@ -215,6 +298,7 @@ public class MainActivity extends AppCompatActivity {
             HashMap<String, Object> map = new HashMap<>();
             map.put("device_name", Build.MANUFACTURER + " " + Build.MODEL);
             map.put("device_type", Peer.DeviceType.ANDROID.ordinal());
+            map.put("msg_type", com.bridgefy.samples.chat.entities.Message.TYPE_MESSAGE);
             device.sendMessage(map);
         }
 

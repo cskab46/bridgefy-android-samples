@@ -106,27 +106,27 @@ public class ChatActivity extends AppCompatActivity {
             ab.setDisplayHomeAsUpEnabled(true);
         }
 
-        // transfer speed thread
-        Thread transSpeedThread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    TimerTask timerTask_speed = new TimerTask() {
-
-                        @Override
-                        public void run() {
-                            long speed = receiveSizeCount - lastReceiveSizeCount;
-                            Log.i(this.getClass().getName(), "getSpeed,count=" + receiveSizeCount + ",lastCount=" + lastReceiveSizeCount + ",speed=" + speed);
-                            lastReceiveSizeCount = receiveSizeCount;
-                        }
-                    };
-                    Timer timer_speed = new Timer();
-                    timer_speed.schedule(timerTask_speed, 0, 1000);// 1s判断一次。计算实时速度，
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        });
+//        // transfer speed thread
+//        Thread transSpeedThread = new Thread(new Runnable() {
+//            @Override
+//            public void run() {
+//                try {
+//                    TimerTask timerTask_speed = new TimerTask() {
+//
+//                        @Override
+//                        public void run() {
+//                            long speed = receiveSizeCount - lastReceiveSizeCount;
+//                            Log.i(this.getClass().getName(), "getSpeed,count=" + receiveSizeCount + ",lastCount=" + lastReceiveSizeCount + ",speed=" + speed);
+//                            lastReceiveSizeCount = receiveSizeCount;
+//                        }
+//                    };
+//                    Timer timer_speed = new Timer();
+//                    timer_speed.schedule(timerTask_speed, 0, 1000);// 1s判断一次。计算实时速度，
+//                } catch (Exception e) {
+//                    e.printStackTrace();
+//                }
+//            }
+//        });
 //        transSpeedThread.start();
 
         // register the receiver to listen for incoming messages
@@ -134,19 +134,23 @@ public class ChatActivity extends AppCompatActivity {
                 .registerReceiver(new BroadcastReceiver() {
                     @Override
                     public void onReceive(Context context, Intent intent) {
-                        Message message = new Message(intent.getStringExtra(MainActivity.INTENT_EXTRA_MSG));
+                        Message message;
+                        int msgType = intent.getIntExtra(MainActivity.INTENT_EXTRA_MSGTYPE, -1);
+                        if (msgType == Message.TYPE_FILE) {
+                            message = new Message(intent.getStringExtra(MainActivity.INTENT_EXTRA_MSG));
+                            message.setDataLen(intent.getIntExtra(MainActivity.INTENT_EXTRA_DATALEN,0));
+                        } else if (msgType == Message.TYPE_DATA) {
+                            message = new Message(intent.getStringExtra(MainActivity.INTENT_EXTRA_MSG));
+                            message.setDataLen(intent.getIntExtra(MainActivity.INTENT_EXTRA_DATALEN,0));
+                        } else {
+                            message = new Message(intent.getStringExtra(MainActivity.INTENT_EXTRA_MSG));
+                        }
+                        message.setMsgType(msgType);
                         message.setDeviceName(intent.getStringExtra(MainActivity.INTENT_EXTRA_NAME));
                         message.setDirection(Message.INCOMING_MESSAGE);
-                        receiveSizeCount += message.getText().length();
                         long sendTimestamp = intent.getLongExtra(MainActivity.INTENT_EXTRA_MSGSENDTS, 0);
                         long recvTimestap = System.currentTimeMillis();
                         message.setTimeStr(String.valueOf(recvTimestap - sendTimestamp));
-
-                        if (intent.getIntExtra(MainActivity.INTENT_EXTRA_MSGTYPE, 0 ) == com.bridgefy.samples.chat.entities.Message.TYPE_FILE) {
-                            message.setFileName(intent.getStringExtra(MainActivity.INTENT_EXTRA_FILENAME));
-                            message.setFileDataLen(intent.getByteArrayExtra(MainActivity.INTENT_EXTRA_FILEDATA).length);
-                            //Todo save to local filesystem
-                        }
                         messagesAdapter.addMessage(message);
                     }
                 }, new IntentFilter(conversationId));
@@ -196,25 +200,27 @@ public class ChatActivity extends AppCompatActivity {
                     content.put("device_name", Build.MANUFACTURER + " " + Build.MODEL);
 
                     // we put extra information in broadcast packets since they won't be bound to a session
-                    for (int i = 0; i < 1; i++) {
+                    for (int i = 0; i < 3; i++) {
                         try {
-                            Thread.sleep(80);
+                            Thread.sleep(50);
                         } catch (InterruptedException e) {
                             e.printStackTrace();
                         }
 
-                        char[] datafill = new char[10000000];
-//                        Arrays.fill(datafill, String.valueOf(i%10).toCharArray()[0]);
-                        Arrays.fill(datafill, 'a');
-                        String dataFill = new String(datafill);
-                        Log.i(this.getClass().getName(), "char: " + datafill[0]);
-                        Log.i(this.getClass().getName(), "datafill: " + dataFill);
-                        content.put("text", dataFill);
-                        content.put("msg_type", Message.TYPE_MESSAGE);
+                        byte[] datafill = new byte[1000000];
+                        String text = String.valueOf(i%10);
+                        Arrays.fill(datafill, text.getBytes()[0]);
+//                        Arrays.fill(datafill, 'a');
+                        Log.i(this.getClass().getName(), "char: " + text + "datafill: " + datafill);
+
+                        content.put("text", text);
+                        content.put("Data", datafill);
+                        content.put("msg_type", Message.TYPE_DATA);
                         builder.setContent(content);
                         Bridgefy.sendBroadcastMessage(builder.build(),
                                 BFEngineProfile.BFConfigProfileLongReach);
-                        Message message = new Message(String.valueOf(i));
+                        Message message = new Message(text);
+                        message.setMsgType(Message.TYPE_DATA);
                         message.setDirection(Message.OUTGOING_MESSAGE);
 
                         android.os.Message mesToHandler = android.os.Message.obtain(mHandler);
@@ -275,11 +281,10 @@ public class ChatActivity extends AppCompatActivity {
                             content.put("device_type", Peer.DeviceType.ANDROID.ordinal());
                             content.put("device_name", Build.MANUFACTURER + " " + Build.MODEL);
                             content.put("msg_type", Message.TYPE_FILE);
-                            content.put("file", f.getName());
 
+                            content.put("text", f.getName());
+                            content.put("Data", fileContent);
                             builder.setContent(content);
-                            builder.setData(fileContent);
-
                             Bridgefy.sendBroadcastMessage(builder.build(),
                                     BFEngineProfile.BFConfigProfileLongReach);
 
@@ -323,20 +328,17 @@ public class ChatActivity extends AppCompatActivity {
             // create a HashMap object to send
             HashMap<String, Object> content = new HashMap<>();
             content.put("text", messageString);
-
+            content.put("msg_type", Message.TYPE_MESSAGE);
             // send message text to device
             if (conversationId.equals(BROADCAST_CHAT)) {
                 // we put extra information in broadcast packets since they won't be bound to a session
                 content.put("device_name", Build.MANUFACTURER + " " + Build.MODEL);
                 content.put("device_type", Peer.DeviceType.ANDROID.ordinal());
-                content.put("msg_type", Message.TYPE_MESSAGE);
-
                 com.bridgefy.sdk.client.Message.Builder builder = new com.bridgefy.sdk.client.Message.Builder();
                 builder.setContent(content);
                 Bridgefy.sendBroadcastMessage(builder.build(),
                         BFEngineProfile.BFConfigProfileLongReach);
             } else {
-
                 com.bridgefy.sdk.client.Message.Builder builder = new com.bridgefy.sdk.client.Message.Builder();
                 builder.setContent(content).setReceiverId(conversationId);
 
@@ -345,7 +347,6 @@ public class ChatActivity extends AppCompatActivity {
             }
         }
     }
-
 
     /**
      * RECYCLER VIEW CLASSES
@@ -427,14 +428,24 @@ public class ChatActivity extends AppCompatActivity {
 
                 if (message.getDirection() == Message.INCOMING_MESSAGE &&
                         conversationId.equals(BROADCAST_CHAT)) {
-                    Log.i(this.getClass().getName(), "message: " + message.getText().charAt(1));
-//                    this.txtMessage.setText(message.getDeviceName() + ":\n" + message.getText());
-                    if (message.getFileDataLen() > 0) {
-                        this.txtMessage.setText(message.getDeviceName() + ":\nlength: " + message.getText().length() + " * " + message.getText().charAt(1) + "\ntime: " + message.getTimeStr());
-                    } else {
-                        this.txtMessage.setText(message.getDeviceName() + ":\nfileName: " + message.getFileName() + " length: " + message.getFileDataLen() + "\ntime: " + message.getTimeStr());
+                    this.txtMessage.setText(message.getDeviceName() + ":\n");
+                    switch (message.getMsgType()) {
+                        case Message.TYPE_MESSAGE:
+                            this.txtMessage.setText(message.getText());
+                            break;
+                        case Message.TYPE_FILE:
+                            this.txtMessage.setText("fileName: " + message.getText()
+                                    + " length: " + message.getDataLen()
+                                    + "\ntime: " + message.getTimeStr());
+                            break;
+                        case Message.TYPE_DATA:
+                            this.txtMessage.setText("Data: " + message.getText()
+                                    + " length: " + message.getDataLen()
+                                    + "\ntime: " + message.getTimeStr());
+                            break;
+                        default:
+                            break;
                     }
-
                 } else {
                     this.txtMessage.setText(message.getText());
                 }

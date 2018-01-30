@@ -13,30 +13,32 @@ public class Message {
 
     public final static int TYPE_MESSAGE = 0;
     public final static int TYPE_FILE = 1;
+    public final static int TYPE_DATA = 2;
 
     private int    direction;
     private String deviceName;
     private String text;
     private String timeStr;
-    private String fileName;
+    private int msgType;
+    private int dataLen;
 
-    public String getFileName() {
-        return fileName;
+    public int getDataLen() {
+        return dataLen;
     }
 
-    public void setFileName(String fileName) {
-        this.fileName = fileName;
+    public void setDataLen(int dataLen) {
+        this.dataLen = dataLen;
     }
 
-    public int getFileDataLen() {
-        return fileDataLen;
+    public int getMsgType() {
+        return msgType;
     }
 
-    public void setFileDataLen(int fileDataLen) {
-        this.fileDataLen = fileDataLen;
+    public void setMsgType(int msgType) {
+        this.msgType = msgType;
     }
 
-    private int fileDataLen;
+
 
     public Message(String text) {
         this.text = text;
