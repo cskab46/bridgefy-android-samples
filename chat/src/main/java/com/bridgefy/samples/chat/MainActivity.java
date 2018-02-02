@@ -2,13 +2,17 @@ package com.bridgefy.samples.chat;
 
 import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.IBinder;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.AppCompatActivity;
@@ -23,7 +27,9 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.bridgefy.samples.chat.entities.MessageEvent;
 import com.bridgefy.samples.chat.entities.Peer;
+import com.bridgefy.samples.chat.service.SendQueue;
 import com.bridgefy.sdk.client.Bridgefy;
 import com.bridgefy.sdk.client.BridgefyClient;
 import com.bridgefy.sdk.client.Device;
@@ -32,6 +38,8 @@ import com.bridgefy.sdk.client.MessageListener;
 import com.bridgefy.sdk.client.RegistrationListener;
 import com.bridgefy.sdk.client.Session;
 import com.bridgefy.sdk.client.StateListener;
+
+import org.greenrobot.eventbus.EventBus;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -42,7 +50,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements ServiceConnection {
 
     private String TAG = "MainActivity";
 
@@ -55,6 +63,9 @@ public class MainActivity extends AppCompatActivity {
     static final String INTENT_EXTRA_DATALEN = "DataLen";
     static final String BROADCAST_CHAT    = "Broadcast";
 
+    private Intent sendQueueIntent;
+    private SendQueue.Binder sendQueueBinder;
+
     PeersRecyclerViewAdapter peersAdapter =
             new PeersRecyclerViewAdapter(new ArrayList<Peer>());
 
@@ -63,7 +74,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
+        Log.i("MainActivity", "onCreate ");
         // Configure the Toolbar
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
@@ -72,14 +83,13 @@ public class MainActivity extends AppCompatActivity {
         RecyclerView recyclerView = findViewById(R.id.peer_list);
         recyclerView.setAdapter(peersAdapter);
 
+        sendQueueIntent = new Intent(MainActivity.this, SendQueue.class);
+        bindService(sendQueueIntent, this, Context.BIND_AUTO_CREATE);
+    }
 
-
-//        if (isThingsDevice(this)) {
-//            //enabling bluetooth automatically
-//            BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-//            bluetoothAdapter.enable();
-//        }
-
+    @Override
+    public void onServiceConnected(ComponentName name, IBinder service) {
+        Log.i(TAG, "onServiceConnected");
         Bridgefy.initialize(getApplicationContext(), new RegistrationListener() {
             @Override
             public void onRegistrationSuccessful(BridgefyClient bridgefyClient) {
@@ -95,13 +105,30 @@ public class MainActivity extends AppCompatActivity {
                         Toast.LENGTH_LONG).show();
             }
         });
+
+        sendQueueBinder = (SendQueue.Binder) service;
     }
+
+    @Override
+    public void onServiceDisconnected(ComponentName componentName) {
+        Log.i(TAG, "onServiceDisconnected");
+        Bridgefy.stop();
+    }
+
+//    private Handler hander = new Handler(){
+//        @Override
+//        public void handleMessage(Message msg) {
+//            super.handleMessage(msg);
+//            textView.setText(msg.getData().getString("data"));
+//        }
+//    };
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
 
         if (isFinishing())
+            Log.i(TAG, "onDestroy");
             Bridgefy.stop();
     }
 
@@ -136,10 +163,6 @@ public class MainActivity extends AppCompatActivity {
         Bridgefy.start(messageListener, stateListener);
     }
 
-//    public boolean isThingsDevice(Context context) {
-//        final PackageManager pm = context.getPackageManager();
-//        return pm.hasSystemFeature("android.hardware.type.embedded");
-//    }
 
     private MessageListener messageListener = new MessageListener() {
         @Override
@@ -167,22 +190,24 @@ public class MainActivity extends AppCompatActivity {
                                 .putExtra(INTENT_EXTRA_MSG, incomingMessage)
                                 .putExtra(INTENT_EXTRA_MSGTYPE, msgType));
             }
-//            if (isThingsDevice(MainActivity.this)) {
-//                //if it's an Android Things device, reply automatically
-//                HashMap<String, Object> content = new HashMap<>();
-//                content.put("text", "Beep boop. I'm a bot.");
-//
-//                Message.Builder builder=new Message.Builder();
-//                builder.setContent(content).setReceiverId(message.getSenderId());
-//                Bridgefy.sendMessage(builder.build());
-//
-//            }
         }
 
         @Override
         public void onMessageSent(Message message) {
             super.onMessageSent(message);
-            Log.i(TAG, "message sent ! time used: " + (System.currentTimeMillis() - message.getDateSent()));
+//            Intent intent;
+            if (message.getSenderId() == null) {
+                Log.i(TAG, "message sent ! time used: " + (System.currentTimeMillis() - message.getDateSent()));
+                EventBus.getDefault().post(new MessageEvent("open!"));
+//                intent = new Intent(BROADCAST_CHAT);
+//                intent.putExtra(INTENT_EXTRA_MSGTYPE, com.bridgefy.samples.chat.entities.Message.TYPE_MSGSENT);
+//                LocalBroadcastManager.getInstance(getBaseContext()).sendBroadcast(intent);
+            }
+// else {
+//                intent = new Intent(message.getSenderId());
+//                intent.putExtra(INTENT_EXTRA_MSGTYPE, com.bridgefy.samples.chat.entities.Message.TYPE_MSGSENT);
+//            }
+
         }
 
         @Override
@@ -295,11 +320,14 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onDeviceConnected(final Device device, Session session) {
             // send our information to the Device
+            Message.Builder builder = new Message.Builder();
             HashMap<String, Object> map = new HashMap<>();
             map.put("device_name", Build.MANUFACTURER + " " + Build.MODEL);
             map.put("device_type", Peer.DeviceType.ANDROID.ordinal());
             map.put("msg_type", com.bridgefy.samples.chat.entities.Message.TYPE_MESSAGE);
-            device.sendMessage(map);
+            builder.setContent(map).setReceiverId(device.getUserId());
+            sendQueueBinder.getSendQueue().addMessageToSendQueue(builder.build());
+//            device.sendMessage(map);
         }
 
         @Override

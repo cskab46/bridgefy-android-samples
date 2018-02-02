@@ -14,6 +14,7 @@ public class Message {
     public final static int TYPE_MESSAGE = 0;
     public final static int TYPE_FILE = 1;
     public final static int TYPE_DATA = 2;
+    public final static int TYPE_MSGSENT = 3;
 
     private int    direction;
     private String deviceName;

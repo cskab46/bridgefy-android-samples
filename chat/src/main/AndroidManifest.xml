@@ -20,6 +20,8 @@
         android:theme="@style/AppTheme">
         <uses-library android:name="com.google.android.things" android:required="false" />
 
+        <service android:name=".service.SendQueue">
+        </service>
 
         <activity
             android:name=".MainActivity"
