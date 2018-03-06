@@ -1,9 +1,0 @@
-<resources>
-    <string name="app_name">TwitterForwarder</string>
-    <string name="placeholder">What\'s happening?</string>
-
-    <!-- Commons -->
-    <string name="powered_by">Powered by Bridgefy</string>
-    <string name="registration_error">A registration occurred. Make sure you\'re online the first time
-    that you install this sample app</string>
-</resources>
