@@ -1,10 +1,12 @@
 <resources>
-    <string name="app_name">Chat</string>
-    <string name="powered_by">Powered by Bridgefy</string>
-    <string name="placeholder">Write a message</string>
-    <string name="broadcast">Broadcast</string>
-    <string name="registration_error">A registration occurred. Make sure you\'re online the first time
-    that you install this sample app</string>
-    <string name="test_send_msg">test snd msg</string>
-    <string name="test_send_file">test snd file</string>
+    <string name="app_name">蓝牙聊天Demo</string>
+    <string name="powered_by">蓝牙聊天Demo</string>
+    <string name="placeholder">输入</string>
+    <string name="broadcast">广播</string>
+    <string name="registration_error">注册失败，需要能连上Google Play</string>
+    <string name="title_intro">欢迎使用蓝牙聊天!</string>
+    <string name="text_intro">请先设置聊天使用的昵称</string>
+    <string name="text_footer">Demo</string>
+    <string name="text_username">Username</string>
+    <string name="button_start">start</string>
 </resources>

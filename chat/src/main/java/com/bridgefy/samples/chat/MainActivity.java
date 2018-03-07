@@ -9,6 +9,7 @@ import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.RecyclerView;
@@ -39,16 +40,16 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity {
 
     private String TAG = "MainActivity";
-
+    private boolean isRegistered = false;
+    String username;
     static final String INTENT_EXTRA_NAME = "peerName";
     static final String INTENT_EXTRA_UUID = "peerUuid";
     static final String INTENT_EXTRA_TYPE = "deviceType";
     static final String INTENT_EXTRA_MSG  = "message";
-    static final String INTENT_EXTRA_MSGSENDTS = "sendtimestamp";
     static final String BROADCAST_CHAT    = "Broadcast";
+    static final String INTENT_EXTRA_MSGSENDTS = "sendtimestamp";
 
-    PeersRecyclerViewAdapter peersAdapter =
-            new PeersRecyclerViewAdapter(new ArrayList<Peer>());
+    PeersRecyclerViewAdapter peersAdapter;
 
 
     @Override
@@ -61,38 +62,54 @@ public class MainActivity extends AppCompatActivity {
         setSupportActionBar(toolbar);
         toolbar.setTitle(getTitle());
 
-        RecyclerView recyclerView = findViewById(R.id.peer_list);
-        recyclerView.setAdapter(peersAdapter);
+        // load our username
+        username = getSharedPreferences(Constants.PREFS_NAME, 0).getString(Constants.PREFS_USERNAME, null);
 
+        if (isThingsDevice(this)) {
+            //enabling bluetooth automatically
+            BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+            bluetoothAdapter.enable();
+        } else {
+            // check that we have permissions, otherwise fire the IntroActivity
+            if ((ContextCompat.checkSelfPermission(getApplicationContext(),
+                    Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) ||
+                    (username == null)) {
+                startActivity(new Intent(getBaseContext(), IntroActivity.class));
+                finish();
+            } else {
+                peersAdapter = new PeersRecyclerViewAdapter(new ArrayList<Peer>());
+                RecyclerView recyclerView = findViewById(R.id.peer_list);
+                recyclerView.setAdapter(peersAdapter);
+                TextView ContentView;
+                ContentView = findViewById(R.id.peerName);
+                ContentView.setText(username);
 
+                Bridgefy.initialize(getApplicationContext(), new RegistrationListener() {
+                    @Override
+                    public void onRegistrationSuccessful(BridgefyClient bridgefyClient) {
+                        // Start Bridgefy
+                        startBridgefy();
+                        isRegistered = true;
+                    }
 
-//        if (isThingsDevice(this)) {
-//            //enabling bluetooth automatically
-//            BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-//            bluetoothAdapter.enable();
-//        }
-
-        Bridgefy.initialize(getApplicationContext(), new RegistrationListener() {
-            @Override
-            public void onRegistrationSuccessful(BridgefyClient bridgefyClient) {
-                // Start Bridgefy
-                startBridgefy();
+                    @Override
+                    public void onRegistrationFailed(int errorCode, String message) {
+                        Toast.makeText(getBaseContext(), getString(R.string.registration_error),
+                                Toast.LENGTH_LONG).show();
+                    }
+                });
             }
+        }
 
-            @Override
-            public void onRegistrationFailed(int errorCode, String message) {
-                Toast.makeText(getBaseContext(), getString(R.string.registration_error),
-                        Toast.LENGTH_LONG).show();
-            }
-        });
+
     }
 
     @Override
     protected void onDestroy() {
-        super.onDestroy();
-
-        if (isFinishing())
+        if (isRegistered &&  isFinishing())
             Bridgefy.stop();
+
+        super.onDestroy();
     }
 
     @Override
@@ -126,10 +143,10 @@ public class MainActivity extends AppCompatActivity {
         Bridgefy.start(messageListener, stateListener);
     }
 
-//    public boolean isThingsDevice(Context context) {
-//        final PackageManager pm = context.getPackageManager();
-//        return pm.hasSystemFeature("android.hardware.type.embedded");
-//    }
+    public boolean isThingsDevice(Context context) {
+        final PackageManager pm = context.getPackageManager();
+        return pm.hasSystemFeature("android.hardware.type.embedded");
+    }
 
     private MessageListener messageListener = new MessageListener() {
         @Override
@@ -142,7 +159,8 @@ public class MainActivity extends AppCompatActivity {
                 peer.setDeviceType(extractType(message));
                 peersAdapter.addPeer(peer);
                 Toast.makeText(getApplicationContext(), "device " + message.getContent().get("device_name") +" connected!", Toast.LENGTH_LONG).show();
-            // any other direct message should be treated as such
+
+                // any other direct message should be treated as such
             } else {
                 String incomingMessage = (String) message.getContent().get("text");
                 LocalBroadcastManager.getInstance(getBaseContext()).sendBroadcast(
@@ -150,16 +168,16 @@ public class MainActivity extends AppCompatActivity {
                                 .putExtra(INTENT_EXTRA_MSG, incomingMessage));
             }
 
-//            if (isThingsDevice(MainActivity.this)) {
-//                //if it's an Android Things device, reply automatically
-//                HashMap<String, Object> content = new HashMap<>();
-//                content.put("text", "Beep boop. I'm a bot.");
-//
-//                Message.Builder builder=new Message.Builder();
-//                builder.setContent(content).setReceiverId(message.getSenderId());
-//                Bridgefy.sendMessage(builder.build());
-//
-//            }
+            if (isThingsDevice(MainActivity.this)) {
+                //if it's an Android Things device, reply automatically
+                HashMap<String, Object> content = new HashMap<>();
+                content.put("text", "Beep boop. I'm a bot.");
+
+                Message.Builder builder=new Message.Builder();
+                builder.setContent(content).setReceiverId(message.getSenderId());
+                Bridgefy.sendMessage(builder.build());
+
+            }
         }
 
         @Override
@@ -167,11 +185,10 @@ public class MainActivity extends AppCompatActivity {
             // we should not expect to have connected previously to the device that originated
             // the incoming broadcast message, so device information is included in this packet
             String incomingMsg = (String) message.getContent().get("text");
-//            String incomingMsg = (String) message.getData().toString();
             String deviceName  = (String) message.getContent().get("device_name");
-//            Peer.DeviceType deviceType = extractType(message);
             Peer.DeviceType deviceType = Peer.DeviceType.ANDROID;
             Long sendTimestamp = message.getDateSent();
+
             LocalBroadcastManager.getInstance(getBaseContext()).sendBroadcast(
                     new Intent(BROADCAST_CHAT)
                             .putExtra(INTENT_EXTRA_NAME, deviceName)
@@ -197,7 +214,8 @@ public class MainActivity extends AppCompatActivity {
         public void onDeviceConnected(final Device device, Session session) {
             // send our information to the Device
             HashMap<String, Object> map = new HashMap<>();
-            map.put("device_name", Build.MANUFACTURER + " " + Build.MODEL);
+//            map.put("device_name", Build.MANUFACTURER + " " + Build.MODEL);
+            map.put("device_name", username);
             map.put("device_type", Peer.DeviceType.ANDROID.ordinal());
             device.sendMessage(map);
         }
@@ -302,6 +320,7 @@ public class MainActivity extends AppCompatActivity {
             PeerViewHolder(View view) {
                 super(view);
                 mContentView = view.findViewById(R.id.peerName);
+                mContentView.setText(username);
                 view.setOnClickListener(this);
             }
 
